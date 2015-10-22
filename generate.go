@@ -38,6 +38,7 @@ var generateFlags = []cli.Flag{
 	cli.StringSliceFlag{Name: "bind", Usage: "bind mount directories src:dest:(rw,ro)"},
 	cli.StringSliceFlag{Name: "prestart", Usage: "path to prestart hooks"},
 	cli.StringSliceFlag{Name: "poststop", Usage: "path to poststop hooks"},
+	cli.StringSliceFlag{Name: "poststart", Usage: "path to poststart hooks"},
 	cli.StringFlag{Name: "root-propagation", Usage: "mount propagation for root"},
 }
 
@@ -175,6 +176,15 @@ func addHooks(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli
 			args = parts[1:]
 		}
 		rspec.Hooks.Poststop = append(rspec.Hooks.Poststop, specs.Hook{Path: path, Args: args})
+	}
+	for _, post := range context.StringSlice("poststart") {
+		parts := strings.Split(post, ":")
+		args := []string{}
+		path := parts[0]
+		if len(parts) > 1 {
+			args = parts[1:]
+		}
+		rspec.Hooks.Poststart = append(rspec.Hooks.Poststart, specs.Hook{Path: path, Args: args})
 	}
 	return nil
 }
