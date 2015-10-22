@@ -40,6 +40,7 @@ var generateFlags = []cli.Flag{
 	cli.StringSliceFlag{Name: "poststop", Usage: "path to poststop hooks"},
 	cli.StringSliceFlag{Name: "poststart", Usage: "path to poststart hooks"},
 	cli.StringFlag{Name: "root-propagation", Usage: "mount propagation for root"},
+	cli.StringFlag{Name: "version", Usage: "version of the specification"},
 }
 
 var (
@@ -97,6 +98,7 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	spec.Process.User.UID = uint32(context.Int("uid"))
 	spec.Process.User.GID = uint32(context.Int("gid"))
 	rspec.Linux.SelinuxProcessLabel = context.String("selinux-label")
+	spec.Version = context.String("version")
 
 	args := context.String("args")
 	if args != "" {
