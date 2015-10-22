@@ -40,7 +40,11 @@ var generateFlags = []cli.Flag{
 	cli.StringSliceFlag{Name: "poststop", Usage: "path to poststop hooks"},
 	cli.StringSliceFlag{Name: "poststart", Usage: "path to poststart hooks"},
 	cli.StringFlag{Name: "root-propagation", Usage: "mount propagation for root"},
-	cli.StringFlag{Name: "version", Usage: "version of the specification"},
+	cli.StringFlag{Name: "version", Value: "0.2.0", Usage: "version of the specification"},
+	cli.StringFlag{Name: "os", Value: runtime.GOOS, Usage: "operating system the container is created for"},
+	cli.StringFlag{Name: "arch", Value: runtime.GOARCH, Usage: "architecture the container is created for"},
+	cli.StringFlag{Name: "cwd", Usage: "current working directory for the process"},
+	cli.StringSliceFlag{Name: "mountpoint-add", Usage: "add mountpoints"},
 }
 
 var (
@@ -99,6 +103,9 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	spec.Process.User.GID = uint32(context.Int("gid"))
 	rspec.Linux.SelinuxProcessLabel = context.String("selinux-label")
 	spec.Version = context.String("version")
+	spec.Platform.OS = context.String("os")
+	spec.Platform.Arch = context.String("arch")
+	spec.Process.Cwd = context.String("cwd")
 
 	args := context.String("args")
 	if args != "" {
@@ -139,7 +146,23 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	if err := addRootPropagation(spec, rspec, context); err != nil {
 		return err
 	}
+	if err := addMountPoint(spec, rspec, context); err != nil {
+		return err
+	}
 
+	return nil
+}
+
+func addMountPoint(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	for _, mps := range context.StringSlice("mountpoint-add") {
+		mp := strings.Split(mps, ":")
+		if len(mp) == 2 {
+			newmp := specs.MountPoint{mp[0], mp[1]}
+			spec.Mounts = append(spec.Mounts, newmp)
+		} else {
+			return fmt.Errorf("mountpoint-add error: %s", mps)
+		}
+	}
 	return nil
 }
 
