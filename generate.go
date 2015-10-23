@@ -56,7 +56,13 @@ var generateFlags = []cli.Flag{
 	cli.StringSliceFlag{Name: "device-add", Usage: "add device nodes that are created and enabled for the container"},
 	cli.StringFlag{Name: "seccomp-default", Usage: "specifies the the defaultaction of Seccomp syscall restrictions"},
 	cli.StringSliceFlag{Name: "seccomp-arch", Usage: "specifies Additional architectures permitted to be used for system calls"},
-	cli.StringSliceFlag{Name: "seccomp-syscalls", Usage: "specifies Additional architectures permitted to be used for system calls"},
+	cli.StringSliceFlag{Name: "seccomp-syscalls", Usage: "specifies Additional architectures permitted to be used for system calls, e.g[getcwd:SCMP_ACT_ERRNO:1/1/2/SCMP_CMP_GE,3/3/3/SCMP_CMP_GT]"},
+	cli.BoolFlag{Name: "disableoomiller", Usage: "disables the OOM killer for out of memory conditions"},
+	cli.StringFlag{Name: "memory", Usage: "define Memory restriction configuration"},
+	cli.StringFlag{Name: "cpu", Usage: "define  CPU resource restriction configuration"},
+	cli.IntFlag{Name: "pids", Usage: "define  Maximum number of PIDs"},
+	cli.IntFlag{Name: "blockio-weight", Usage: "Specifies per cgroup weight, range is from 10 to 1000"},
+	cli.IntFlag{Name: "blockio-leafweight", Usage: "Specifies tasks' weight in the given cgroup while competing with the cgroup's child cgroups, range is from 10 to 1000, cfq scheduler only"},
 }
 
 var (
@@ -121,6 +127,16 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	spec.Process.Terminal = context.Bool("terminal")
 	rspec.Linux.CgroupsPath = context.String("cgroupspath")
 	rspec.Linux.ApparmorProfile = context.String("apparmor")
+	rspec.Linux.Resources.DisableOOMKiller = context.Bool("disableoomiller")
+	rspec.Linux.Resources.Pids.Limit = int64(context.Int("pids"))
+	// if context.Int("blockio-weight") > 1000 || context.Int("blockio-weight") < 10 {
+	// 	return fmt.Errorf("blockio-weight range is from 10 to 1000")
+	// }
+	// rspec.Linux.Resources.BlockIO.Weight = uint16(context.Int("blockio-weight"))
+	// if context.Int("blockio-leafweight") > 1000 || context.Int("blockio-leafweight") < 10 {
+	// 	return fmt.Errorf("blockio-leafweight range is from 10 to 1000")
+	// }
+	// rspec.Linux.Resources.BlockIO.LeafWeight = uint16(context.Int("blockio-leafweight"))
 
 	args := context.String("args")
 	if args != "" {
@@ -185,6 +201,55 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	if err := addSeccompArchitectures(spec, rspec, context); err != nil {
 		return err
 	}
+	if err := addSeccompSyscalls(spec, rspec, context); err != nil {
+		return err
+	}
+	// if err := setResourceMemory(spec, rspec, context); err != nil {
+	// 	return err
+	// }
+	// if err := setResourceCPU(spec, rspec, context); err != nil {
+	// 	return err
+	// }
+	return nil
+}
+
+func setResourceCPU(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	cpustr := context.String("cpu")
+	cpu := strings.Split(cpustr, ":")
+	if len(cpu) == 7 {
+		shares, err := strconv.Atoi(cpu[0])
+		quota, err := strconv.Atoi(cpu[1])
+		period, err := strconv.Atoi(cpu[2])
+		realtimeruntime, err := strconv.Atoi(cpu[3])
+		realtimeperiod, err := strconv.Atoi(cpu[4])
+		if err != nil {
+			return err
+		}
+		cpustruct := specs.CPU{int64(shares), int64(quota), int64(period), int64(realtimeruntime), int64(realtimeperiod), cpu[5], cpu[6]}
+		rspec.Linux.Resources.CPU = cpustruct
+	} else {
+		return fmt.Errorf("cpu error: %s", cpustr)
+	}
+	return nil
+}
+
+func setResourceMemory(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	mems := context.String("memory")
+	mem := strings.Split(mems, ":")
+	if len(mem) == 5 {
+		limit, err := strconv.Atoi(mem[0])
+		reservation, err := strconv.Atoi(mem[1])
+		swap, err := strconv.Atoi(mem[2])
+		kernel, err := strconv.Atoi(mem[3])
+		swapniess, err := strconv.Atoi(mem[4])
+		if err != nil {
+			return err
+		}
+		memorystruct := specs.Memory{int64(limit), int64(reservation), int64(swap), int64(kernel), int64(swapniess)}
+		rspec.Linux.Resources.Memory = memorystruct
+	} else {
+		return fmt.Errorf("memory error: %s", mems)
+	}
 	return nil
 }
 
@@ -204,12 +269,10 @@ func addSeccompSyscalls(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, co
 				return fmt.Errorf("seccomp-sysctl action must be empty or one of SCMP_ACT_KILL|SCMP_ACT_TRAP|SCMP_ACT_ERRNO|SCMP_ACT_TRACE|SCMP_ACT_ALLOW")
 			}
 			action := specs.Action(syscall[1])
-			argstr := strings.TrimLeft(syscall[2], "{")
-			argstr = strings.TrimRight(argstr, "}")
-			argsslice := strings.Split(argstr, ",")
 			var Args []*specs.Arg
+			argsslice := strings.Split(syscall[2], ",")
 			for _, argsstru := range argsslice {
-				args := strings.Split(argsstru, ".")
+				args := strings.Split(argsstru, "/")
 				if len(args) == 4 {
 					index, err := strconv.Atoi(args[0])
 					value, err := strconv.Atoi(args[1])
@@ -230,14 +293,14 @@ func addSeccompSyscalls(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, co
 						return fmt.Errorf("seccomp-sysctl args must be empty or one of SCMP_CMP_NE|SCMP_CMP_LT|SCMP_CMP_LE|SCMP_CMP_EQ|SCMP_CMP_GE|SCMP_CMP_GT|SCMP_CMP_MASKED_EQ")
 					}
 					op := specs.Operator(args[3])
-					Arg := &specs.Arg{uint(index), uint64(value), uint64(value2), op}
-					Args = append(Args, Arg)
+					Arg := specs.Arg{uint(index), uint64(value), uint64(value2), op}
+					Args = append(Args, &Arg)
 				} else {
 					return fmt.Errorf("seccomp-sysctl args error: %s", argsstru)
 				}
 			}
-			syscallstruct := &specs.Syscall{name, action, Args}
-			rspec.Linux.Seccomp.Syscalls = append(rspec.Linux.Seccomp.Syscalls, syscallstruct)
+			syscallstruct := specs.Syscall{name, action, Args}
+			rspec.Linux.Seccomp.Syscalls = append(rspec.Linux.Seccomp.Syscalls, &syscallstruct)
 		} else {
 			return fmt.Errorf("seccomp sysctl must consits 3 parameters")
 		}
