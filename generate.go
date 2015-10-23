@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -38,7 +39,22 @@ var generateFlags = []cli.Flag{
 	cli.StringSliceFlag{Name: "bind", Usage: "bind mount directories src:dest:(rw,ro)"},
 	cli.StringSliceFlag{Name: "prestart", Usage: "path to prestart hooks"},
 	cli.StringSliceFlag{Name: "poststop", Usage: "path to poststop hooks"},
+	cli.StringSliceFlag{Name: "poststart", Usage: "path to poststart hooks"},
 	cli.StringFlag{Name: "root-propagation", Usage: "mount propagation for root"},
+	cli.StringFlag{Name: "version", Value: "0.2.0", Usage: "version of the specification"},
+	cli.StringFlag{Name: "os", Value: runtime.GOOS, Usage: "operating system the container is created for"},
+	cli.StringFlag{Name: "arch", Value: runtime.GOARCH, Usage: "architecture the container is created for"},
+	cli.StringFlag{Name: "cwd", Usage: "current working directory for the process"},
+	cli.StringSliceFlag{Name: "mountpoint-add", Usage: "add mountpoints"},
+	cli.BoolFlag{Name: "terminal", Usage: "creates an interactive terminal for the container"},
+	cli.StringSliceFlag{Name: "uidmappings", Usage: "add UIDMappings e.g[0:0:10]"},
+	cli.StringSliceFlag{Name: "gidmappings", Usage: "add GIDMappings e.g[0:0:10]"},
+	cli.StringSliceFlag{Name: "rlimit", Usage: "specifies rlimit options to apply to the container's process"},
+	cli.StringSliceFlag{Name: "sysctl", Usage: "Sysctl are a set of key value pairs that are set for the container on start"},
+	cli.StringFlag{Name: "cgroupspath", Usage: "specifies the path to cgroups that are created and/or joined by the container"},
+	cli.StringFlag{Name: "apparmor", Usage: "specifies the the apparmor profile for the container"},
+	cli.StringSliceFlag{Name: "device-add", Usage: "add device nodes that are created and enabled for the container"},
+	cli.StringFlag{Name: "seccomp-default", Usage: "specifies the the defaultaction of Seccomp syscall restrictions"},
 }
 
 var (
@@ -96,6 +112,14 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	spec.Process.User.UID = uint32(context.Int("uid"))
 	spec.Process.User.GID = uint32(context.Int("gid"))
 	rspec.Linux.SelinuxProcessLabel = context.String("selinux-label")
+	spec.Version = context.String("version")
+	spec.Platform.OS = context.String("os")
+	spec.Platform.Arch = context.String("arch")
+	spec.Process.Cwd = context.String("cwd")
+	spec.Process.Terminal = context.Bool("terminal")
+	rspec.Linux.CgroupsPath = context.String("cgroupspath")
+	rspec.Linux.ApparmorProfile = context.String("apparmor")
+	rspec.Linux.Seccomp.DefaultAction = specs.Action(context.String("seccomp-default"))
 
 	args := context.String("args")
 	if args != "" {
@@ -136,7 +160,130 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	if err := addRootPropagation(spec, rspec, context); err != nil {
 		return err
 	}
+	if err := addMountPoint(spec, rspec, context); err != nil {
+		return err
+	}
+	if err := setUIDMappings(spec, rspec, context); err != nil {
+		return err
+	}
+	if err := setGIDMappings(spec, rspec, context); err != nil {
+		return err
+	}
+	if err := setRlimits(spec, rspec, context); err != nil {
+		return err
+	}
+	if err := setSysctl(spec, rspec, context); err != nil {
+		return err
+	}
+	if err := addDevice(spec, rspec, context); err != nil {
+		return err
+	}
+	return nil
+}
 
+func addDevice(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	for _, devs := range context.StringSlice("device-add") {
+		dev := strings.Split(devs, ":")
+		if len(dev) == 8 {
+			path := dev[0]
+			rtemp := []rune(dev[1])
+			typ := rtemp[0]
+			major, err := strconv.Atoi(dev[2])
+			minor, err := strconv.Atoi(dev[3])
+			permi := dev[4]
+			filemodle, err := strconv.Atoi(dev[5])
+			fm := os.FileMode(filemodle)
+			uid, err := strconv.Atoi(dev[6])
+			gid, err := strconv.Atoi(dev[7])
+			if err != nil {
+				return err
+			}
+			device := specs.Device{path, typ, int64(major), int64(minor), permi, fm, uint32(uid), uint32(gid)}
+			rspec.Linux.Devices = append(rspec.Linux.Devices, device)
+		} else {
+			return fmt.Errorf("Device-add error: %s", devs)
+		}
+	}
+	return nil
+}
+
+func setSysctl(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	m := make(map[string]string)
+	for _, scs := range context.StringSlice("sysctl") {
+		sc := strings.Split(scs, ":")
+		if len(sc) == 2 {
+			m[sc[0]] = sc[1]
+		} else {
+			return fmt.Errorf("sysctl error: %s", scs)
+		}
+	}
+	rspec.Linux.Sysctl = m
+	return nil
+}
+
+func addMountPoint(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	for _, mps := range context.StringSlice("mountpoint-add") {
+		mp := strings.Split(mps, ":")
+		if len(mp) == 2 {
+			newmp := specs.MountPoint{mp[0], mp[1]}
+			spec.Mounts = append(spec.Mounts, newmp)
+		} else {
+			return fmt.Errorf("mountpoint-add error: %s", mps)
+		}
+	}
+	return nil
+}
+
+func setUIDMappings(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	for _, idms := range context.StringSlice("uidmappings") {
+		idm := strings.Split(idms, ":")
+		if len(idm) == 3 {
+			hid, err := strconv.Atoi(idm[0])
+			cid, err := strconv.Atoi(idm[1])
+			size, err := strconv.Atoi(idm[2])
+			if err != nil {
+				return err
+			}
+			uidmapping := specs.IDMapping{uint32(hid), uint32(cid), uint32(size)}
+			rspec.Linux.UIDMappings = append(rspec.Linux.UIDMappings, uidmapping)
+		} else {
+			return fmt.Errorf("uidmappings error: %s", idms)
+		}
+	}
+	return nil
+}
+
+func setGIDMappings(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	for _, idms := range context.StringSlice("gidmappings") {
+		idm := strings.Split(idms, ":")
+		if len(idm) == 3 {
+			hid, err := strconv.Atoi(idm[0])
+			cid, err := strconv.Atoi(idm[1])
+			size, err := strconv.Atoi(idm[2])
+			if err != nil {
+				return err
+			}
+			gidmapping := specs.IDMapping{uint32(hid), uint32(cid), uint32(size)}
+			rspec.Linux.GIDMappings = append(rspec.Linux.GIDMappings, gidmapping)
+		} else {
+			return fmt.Errorf("gidmappings error: %s", idms)
+		}
+	}
+	return nil
+}
+
+func setRlimits(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	for _, rls := range context.StringSlice("rlimit") {
+		rl := strings.Split(rls, ":")
+		if len(rl) == 3 {
+			hard, _ := strconv.Atoi(rl[1])
+			soft, _ := strconv.Atoi(rl[2])
+			rlimit := specs.Rlimit{rl[0], uint64(hard), uint64(soft)}
+			rspec.Linux.Rlimits = append(rspec.Linux.Rlimits, rlimit)
+		} else {
+			return fmt.Errorf("rlimits error: %s", rls)
+		}
+	}
 	return nil
 }
 
@@ -175,6 +322,15 @@ func addHooks(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli
 			args = parts[1:]
 		}
 		rspec.Hooks.Poststop = append(rspec.Hooks.Poststop, specs.Hook{Path: path, Args: args})
+	}
+	for _, post := range context.StringSlice("poststart") {
+		parts := strings.Split(post, ":")
+		args := []string{}
+		path := parts[0]
+		if len(parts) > 1 {
+			args = parts[1:]
+		}
+		rspec.Hooks.Poststart = append(rspec.Hooks.Poststart, specs.Hook{Path: path, Args: args})
 	}
 	return nil
 }
