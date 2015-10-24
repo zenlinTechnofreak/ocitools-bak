@@ -6,7 +6,7 @@ rm -rf ${TESTROOT}
 mkdir -p ${TESTROOT}
 tar -xf  rootfs.tar.gz -C ${TESTROOT}
 
-cp runtimetest ${TESTROOT}
+cp cmd/runtimetest/runtimetest ${TESTROOT}
 
 pushd $TESTROOT > /dev/null
 ocitools generate --args /runtimetest
