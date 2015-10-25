@@ -1,21 +1,25 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
-	"strings"
-	"syscall"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/codegangsta/cli"
 	"github.com/opencontainers/specs"
-	"github.com/syndtr/gocapability/capability"
 )
 
-type validation func(*specs.LinuxSpec, *specs.LinuxRuntimeSpec) error
+var spec *specs.LinuxSpec
+var rspec *specs.LinuxRuntimeSpec
+
+func init() {
+	var err error
+	spec, rspec, err = loadSpecConfig()
+	if err != nil {
+		logrus.Fatalf("Failed to load configuration: %q", err)
+	}
+}
 
 func loadSpecConfig() (spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, err error) {
 	cPath := "config.json"
@@ -45,177 +49,69 @@ func loadSpecConfig() (spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, err
 	return spec, rspec, nil
 }
 
-func validateProcess(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
-	uid := os.Getuid()
-	if uint32(uid) != spec.Process.User.UID {
-		return fmt.Errorf("UID expected: %v, actual: %v", spec.Process.User.UID, uid)
-	}
-	gid := os.Getgid()
-	if uint32(gid) != spec.Process.User.GID {
-		return fmt.Errorf("GID expected: %v, actual: %v", spec.Process.User.GID, gid)
-	}
-
-	groups, err := os.Getgroups()
-	if err != nil {
-		return err
-	}
-
-	groupsMap := make(map[int]bool)
-	for _, g := range groups {
-		groupsMap[g] = true
-	}
-
-	for _, g := range spec.Process.User.AdditionalGids {
-		if !groupsMap[int(g)] {
-			return fmt.Errorf("Groups expected: %v, actual (should be superset): %v", spec.Process.User.AdditionalGids, groups)
-		}
-	}
-
-	if spec.Process.Cwd != "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		if cwd != spec.Process.Cwd {
-			return fmt.Errorf("Cwd expected: %v, actual: %v", spec.Process.Cwd, cwd)
-		}
-	}
-
-	cmdlineBytes, err := ioutil.ReadFile("/proc/1/cmdline")
-	if err != nil {
-		return err
-	}
-
-	args := strings.Split(string(bytes.Trim(cmdlineBytes, "\x00")), " ")
-	if len(args) != len(spec.Process.Args) {
-		return fmt.Errorf("Process arguments expected: %v, actual: %v")
-	}
-	for i, a := range args {
-		if a != spec.Process.Args[i] {
-			return fmt.Errorf("Process arguments expected: %v, actual: %v", a, spec.Process.Args[i])
-		}
-	}
-
-	for _, env := range spec.Process.Env {
-		parts := strings.Split(env, "=")
-		key := parts[0]
-		expectedValue := parts[1]
-		actualValue := os.Getenv(key)
-		if actualValue != expectedValue {
-			return fmt.Errorf("Env %v expected: %v, actual: %v", expectedValue, actualValue)
-		}
-	}
-
-	return nil
-}
-
-func validateCapabilities(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
-	capabilityMap := make(map[string]capability.Cap)
-	expectedCaps := make(map[capability.Cap]bool)
-	last := capability.CAP_LAST_CAP
-	// workaround for RHEL6 which has no /proc/sys/kernel/cap_last_cap
-	if last == capability.Cap(63) {
-		last = capability.CAP_BLOCK_SUSPEND
-	}
-	for _, cap := range capability.List() {
-		if cap > last {
-			continue
-		}
-		capKey := fmt.Sprintf("CAP_%s", strings.ToUpper(cap.String()))
-		capabilityMap[capKey] = cap
-		expectedCaps[cap] = false
-	}
-
-	for _, ec := range spec.Linux.Capabilities {
-		cap := capabilityMap[ec]
-		expectedCaps[cap] = true
-	}
-
-	processCaps, err := capability.NewPid(1)
-	if err != nil {
-		return err
-	}
-
-	for _, cap := range capability.List() {
-		expectedSet := expectedCaps[cap]
-		actuallySet := processCaps.Get(capability.EFFECTIVE, cap)
-		if expectedSet != actuallySet {
-			if expectedSet {
-				return fmt.Errorf("Expected Capability %v not set for process", cap.String())
-			} else {
-				return fmt.Errorf("Unexpected Capability %v set for process", cap.String())
-			}
-		}
-	}
-
-	return nil
-}
-
-func validateHostname(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-	if hostname != spec.Hostname {
-		return fmt.Errorf("Hostname expected: %v, actual: %v", spec.Hostname, hostname)
-	}
-	return nil
-}
-
-func validateRlimits(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
-	for _, r := range rspec.Linux.Rlimits {
-		rl, err := strToRlimit(r.Type)
-		if err != nil {
-			return err
-		}
-
-		var rlimit syscall.Rlimit
-		if err := syscall.Getrlimit(rl, &rlimit); err != nil {
-			return err
-		}
-
-		if rlimit.Cur != r.Soft {
-			return fmt.Errorf("%v rlimit soft expected: %v, actual: %v", r.Soft, rlimit.Cur)
-		}
-		if rlimit.Max != r.Hard {
-			return fmt.Errorf("%v rlimit hard expected: %v, actual: %v", r.Hard, rlimit.Max)
-		}
-	}
-	return nil
-}
-
-func validateSysctls(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
-	for k, v := range rspec.Linux.Sysctl {
-		keyPath := filepath.Join("/proc/sys", strings.Replace(k, ".", "/", -1))
-		vBytes, err := ioutil.ReadFile(keyPath)
-		if err != nil {
-			return err
-		}
-		value := strings.TrimSpace(string(bytes.Trim(vBytes, "\x00")))
-		if value != v {
-			return fmt.Errorf("Sysctl %v value expected: %v, actual: %v", k, v, value)
-		}
-	}
-	return nil
-}
-
 func main() {
-	spec, rspec, err := loadSpecConfig()
-	if err != nil {
-		logrus.Fatalf("Failed to load configuration: %q", err)
+
+	app := cli.NewApp()
+	app.Name = "oci-runtimeValidate"
+	app.Version = "0.0.1"
+	app.Usage = "Utilities for OCI runtime validation"
+	app.EnableBashCompletion = true
+
+	app.Commands = []cli.Command{
+		{
+			Name:    "validateProcess",
+			Aliases: []string{"vp"},
+			Usage:   "Validate process with specs",
+			Action: func(c *cli.Context) {
+				if err := validateProcess(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
+				}
+			},
+		},
+		{
+			Name:    "validateCapabilities",
+			Aliases: []string{"vc"},
+			Usage:   "Validate capabilities with specs",
+			Action: func(c *cli.Context) {
+				if err := validateCapabilities(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
+				}
+			},
+		},
+		{
+			Name:    "validateHostname",
+			Aliases: []string{"vh"},
+			Usage:   "Validate hostname with specs",
+			Action: func(c *cli.Context) {
+				if err := validateHostname(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
+				}
+			},
+		},
+		{
+			Name:    "validateRlimits",
+			Aliases: []string{"vr"},
+			Usage:   "Validate rlimits with specs",
+			Action: func(c *cli.Context) {
+				if err := validateRlimits(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
+				}
+			},
+		},
+		{
+			Name:    "validateSysctls",
+			Aliases: []string{"vs"},
+			Usage:   "Validate sysctls with specs",
+			Action: func(c *cli.Context) {
+				if err := validateSysctls(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
+				}
+			},
+		},
 	}
 
-	validations := []validation{
-		validateProcess,
-		validateCapabilities,
-		validateHostname,
-		validateRlimits,
-		validateSysctls,
+	if err := app.Run(os.Args); err != nil {
+		logrus.Fatal(err)
 	}
 
-	for _, v := range validations {
-		if err := v(spec, rspec); err != nil {
-			logrus.Fatalf("Validation failed: %q", err)
-		}
-	}
 }
