@@ -19,6 +19,7 @@ VERSION:
    0.0.1
    
 COMMANDS:
+   validateOverall, va		Validate overall specs
    validateProcess, vp		Validate process with specs
    validateCapabilities, vc	Validate capabilities with specs
    validateHostname, vh		Validate hostname with specs
