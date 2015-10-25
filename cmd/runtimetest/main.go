@@ -13,6 +13,8 @@ import (
 var spec *specs.LinuxSpec
 var rspec *specs.LinuxRuntimeSpec
 
+type validation func(*specs.LinuxSpec, *specs.LinuxRuntimeSpec) error
+
 func init() {
 	var err error
 	spec, rspec, err = loadSpecConfig()
@@ -58,6 +60,26 @@ func main() {
 	app.EnableBashCompletion = true
 
 	app.Commands = []cli.Command{
+		{
+			Name:    "validateOverall",
+			Aliases: []string{"va"},
+			Usage:   "Validate overall specs",
+			Action: func(c *cli.Context) {
+				validations := []validation{
+					validateProcess,
+					validateCapabilities,
+					validateHostname,
+					validateRlimits,
+					validateSysctls,
+				}
+
+				for _, v := range validations {
+					if err := v(spec, rspec); err != nil {
+						logrus.Fatalf("Validation failed: %q", err)
+					}
+				}
+			},
+		},
 		{
 			Name:    "validateProcess",
 			Aliases: []string{"vp"},
