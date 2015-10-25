@@ -63,6 +63,15 @@ var generateFlags = []cli.Flag{
 	cli.IntFlag{Name: "pids", Usage: "define  Maximum number of PIDs"},
 	cli.IntFlag{Name: "blockio-weight", Usage: "Specifies per cgroup weight, range is from 10 to 1000"},
 	cli.IntFlag{Name: "blockio-leafweight", Usage: "Specifies tasks' weight in the given cgroup while competing with the cgroup's child cgroups, range is from 10 to 1000, cfq scheduler only"},
+	cli.StringSliceFlag{Name: "weightdevice", Usage: "Weight per cgroup per device"},
+	cli.StringSliceFlag{Name: "throttlereadbpsdevice", Usage: "IO read rate limit per cgroup per device,bytes per second"},
+	cli.StringSliceFlag{Name: "throttlewritebpsdevice", Usage: "IO write rate limit per cgroup per device,bytes per second"},
+	cli.StringSliceFlag{Name: "throttlereadiopsdevice", Usage: "IO read rate limit per cgroup per device,IO per second"},
+	cli.StringSliceFlag{Name: "throttlewriteiopsdevice", Usage: "IO write rate limit per cgroup per device,IO per second"},
+	cli.StringSliceFlag{Name: "hugepagelimit", Usage: "Hugetlb limit (in bytes)"},
+	cli.StringFlag{Name: "networkid", Usage: " Set class identifier for container's network packets"},
+	cli.StringSliceFlag{Name: "networkpriority ", Usage: "Set priority of network traffic for container"},
+	cli.StringSliceFlag{Name: "mounts", Usage: "Mounts is a mapping of names to mount configurations"},
 }
 
 var (
@@ -129,6 +138,7 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	rspec.Linux.ApparmorProfile = context.String("apparmor")
 	rspec.Linux.Resources.DisableOOMKiller = context.Bool("disableoomiller")
 	rspec.Linux.Resources.Pids.Limit = int64(context.Int("pids"))
+	rspec.Linux.Resources.Network.ClassID = context.String("networkid")
 	// if context.Int("blockio-weight") > 1000 || context.Int("blockio-weight") < 10 {
 	// 	return fmt.Errorf("blockio-weight range is from 10 to 1000")
 	// }
@@ -204,12 +214,101 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	if err := addSeccompSyscalls(spec, rspec, context); err != nil {
 		return err
 	}
+	if err := addHugepageLimit(spec, rspec, context); err != nil {
+		return err
+	}
+	if err := addNetworkPriority(spec, rspec, context); err != nil {
+		return err
+	}
+	if err := addMounts(spec, rspec, context); err != nil {
+		return err
+	}
+	// if err := addThrottleReadBpsDevice(spec, rspec, context); err != nil {
+	// 	return err
+	// }
 	// if err := setResourceMemory(spec, rspec, context); err != nil {
 	// 	return err
 	// }
 	// if err := setResourceCPU(spec, rspec, context); err != nil {
 	// 	return err
 	// }
+	return nil
+}
+
+// func addThrottleReadBpsDevice(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+// 	for _, trbds := range context.StringSlice("throttlereadbpsdevice") {
+// 		trbd := strings.Split(trbds, ":")
+// 		if len(trbds) == 2 {
+// 			blockIODevicestr := trbd[0]
+// 			rate, err_ := strconv.Atoi(trbd[1])
+// 			b := strings.Split(blockIODevicestr, ",")
+// 			if len(b) == 2 {
+// 				major, err := strconv.Atoi(b[0])
+// 				minor, err := strconv.Atoi(b[1])
+// 				if err != nil {
+// 					return err
+// 				}
+// 				td := specs.ThrottleDevice{Rate: uint64(rate)}
+// 				td.blockIODevice.Major = int64(major)
+// 				td.blockIODevice.Minor = int64(minor)
+// 				rspec.Linux.Resources.BlockIO.ThrottleReadBpsDevice = append(rspec.Linux.Resources.BlockIO.ThrottleReadBpsDevice, &td)
+// 			} else {
+// 				return fmt.Errorf("throttlereadbpsdevice error: %s", blockIODevicestr)
+// 			}
+// 		} else {
+// 			return fmt.Errorf("throttlereadbpsdevice error: %s", trbds)
+// 		}
+// 	}
+// 	return nil
+// }
+func addMounts(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	for _, mnts := range context.StringSlice("mounts") {
+		mnt := strings.Split(mnts, ":")
+		if len(mnt) == 4 {
+			mp := mnt[0]
+			tp := mnt[1]
+			src := mnt[2]
+			ops := strings.Split(mnt[3], ",")
+			mounts := specs.Mount{tp, src, ops}
+			rspec.Mounts[mp] = mounts
+		} else {
+			return fmt.Errorf("mounts error: %s", mnts)
+		}
+	}
+	return nil
+}
+
+func addNetworkPriority(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	for _, nps := range context.StringSlice("networkpriority") {
+		np := strings.Split(nps, ":")
+		if len(np) == 2 {
+			priority, err := strconv.Atoi(np[1])
+			if err != nil {
+				return err
+			}
+			p := specs.InterfacePriority{np[0], int64(priority)}
+			rspec.Linux.Resources.Network.Priorities = append(rspec.Linux.Resources.Network.Priorities, p)
+		} else {
+			return fmt.Errorf("networkpriority error: %s", nps)
+		}
+	}
+	return nil
+}
+
+func addHugepageLimit(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	for _, hpls := range context.StringSlice("hugepagelimit") {
+		hpl := strings.Split(hpls, ":")
+		if len(hpl) == 2 {
+			limits, err := strconv.Atoi(hpl[1])
+			if err != nil {
+				return err
+			}
+			hp := specs.HugepageLimit{hpl[0], uint64(limits)}
+			rspec.Linux.Resources.HugepageLimits = append(rspec.Linux.Resources.HugepageLimits, hp)
+		} else {
+			return fmt.Errorf("hugepagelimit error: %s", hpls)
+		}
+	}
 	return nil
 }
 
