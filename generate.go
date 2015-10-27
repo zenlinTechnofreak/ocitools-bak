@@ -141,11 +141,16 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	rspec.Linux.Resources.Network.ClassID = context.String("networkid")
 
 	for i, a := range context.StringSlice("args") {
-		spec.Process.Args = append(spec.Process.Args, a)
-
+		if i == 0 {
+			//Replace "sh" from getDefaultTemplate()
+			spec.Process.Args[0] = a
+		} else {
+			spec.Process.Args = append(spec.Process.Args, a)
+		}
 	}
 
 	for _, e := range context.StringSlice("env") {
+
 		spec.Process.Env = append(spec.Process.Env, e)
 	}
 
