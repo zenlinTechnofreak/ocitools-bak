@@ -50,10 +50,16 @@ func validateProcess(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error
 	if err != nil {
 		return err
 	}
-
-	args := strings.Split(string(bytes.Trim(cmdlineBytes, "\x00")), " ")
+	args := strings.Split(string(bytes.TrimSuffix(cmdlineBytes, []byte("\x00"))), "\x00")
+	/*
+	fmt.Println(len(args))
+	
+	for _, a := range args {
+		fmt.Println(a)
+	}
+	*/
 	if len(args) != len(spec.Process.Args) {
-		return fmt.Errorf("Process arguments expected: %v, actual: %v")
+		return fmt.Errorf("Process arguments expected: %v, actual: %v", len(args),len(spec.Process.Args))
 	}
 	for i, a := range args {
 		if a != spec.Process.Args[i] {
