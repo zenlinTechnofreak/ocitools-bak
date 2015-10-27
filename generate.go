@@ -47,7 +47,7 @@ var generateFlags = []cli.Flag{
 	cli.StringFlag{Name: "cwd", Usage: "current working directory for the process"},
 	cli.StringSliceFlag{Name: "mountpoint-add", Usage: "add mountpoints"},
 	cli.BoolFlag{Name: "terminal", Usage: "creates an interactive terminal for the container"},
-	cli.StringSliceFlag{Name: "uidmappings", Usage: "add UIDMappings e.g[0:0:10]"},
+	cli.StringSliceFlag{Name: "uidmappings", Usage: "add UIDMappings e.g 0:0:10"},
 	cli.StringSliceFlag{Name: "gidmappings", Usage: "add GIDMappings e.g[0:0:10]"},
 	cli.StringSliceFlag{Name: "rlimit", Usage: "specifies rlimit options to apply to the container's process"},
 	cli.StringSliceFlag{Name: "sysctl", Usage: "Sysctl are a set of key value pairs that are set for the container on start"},
@@ -139,14 +139,6 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	rspec.Linux.Resources.DisableOOMKiller = context.Bool("disableoomiller")
 	rspec.Linux.Resources.Pids.Limit = int64(context.Int("pids"))
 	rspec.Linux.Resources.Network.ClassID = context.String("networkid")
-	// if context.Int("blockio-weight") > 1000 || context.Int("blockio-weight") < 10 {
-	// 	return fmt.Errorf("blockio-weight range is from 10 to 1000")
-	// }
-	// rspec.Linux.Resources.BlockIO.Weight = uint16(context.Int("blockio-weight"))
-	// if context.Int("blockio-leafweight") > 1000 || context.Int("blockio-leafweight") < 10 {
-	// 	return fmt.Errorf("blockio-leafweight range is from 10 to 1000")
-	// }
-	// rspec.Linux.Resources.BlockIO.LeafWeight = uint16(context.Int("blockio-leafweight"))
 
 	args := context.String("args")
 	if args != "" {
@@ -167,7 +159,6 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 			spec.Process.User.AdditionalGids = append(spec.Process.User.AdditionalGids, uint32(groupId))
 		}
 	}
-
 	if err := setupCapabilities(spec, rspec, context); err != nil {
 		return err
 	}
@@ -223,44 +214,63 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	if err := addMounts(spec, rspec, context); err != nil {
 		return err
 	}
-	// if err := addThrottleReadBpsDevice(spec, rspec, context); err != nil {
-	// 	return err
-	// }
-	// if err := setResourceMemory(spec, rspec, context); err != nil {
-	// 	return err
-	// }
-	// if err := setResourceCPU(spec, rspec, context); err != nil {
-	// 	return err
-	// }
+	if err := addBlockIO(spec, rspec, context); err != nil {
+		return err
+	}
+	if err := setResourceMemory(spec, rspec, context); err != nil {
+		return err
+	}
+	if err := setResourceCPU(spec, rspec, context); err != nil {
+		return err
+	}
 	return nil
 }
 
-// func addThrottleReadBpsDevice(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
-// 	for _, trbds := range context.StringSlice("throttlereadbpsdevice") {
-// 		trbd := strings.Split(trbds, ":")
-// 		if len(trbds) == 2 {
-// 			blockIODevicestr := trbd[0]
-// 			rate, err_ := strconv.Atoi(trbd[1])
-// 			b := strings.Split(blockIODevicestr, ",")
-// 			if len(b) == 2 {
-// 				major, err := strconv.Atoi(b[0])
-// 				minor, err := strconv.Atoi(b[1])
-// 				if err != nil {
-// 					return err
-// 				}
-// 				td := specs.ThrottleDevice{Rate: uint64(rate)}
-// 				td.blockIODevice.Major = int64(major)
-// 				td.blockIODevice.Minor = int64(minor)
-// 				rspec.Linux.Resources.BlockIO.ThrottleReadBpsDevice = append(rspec.Linux.Resources.BlockIO.ThrottleReadBpsDevice, &td)
-// 			} else {
-// 				return fmt.Errorf("throttlereadbpsdevice error: %s", blockIODevicestr)
-// 			}
-// 		} else {
-// 			return fmt.Errorf("throttlereadbpsdevice error: %s", trbds)
-// 		}
-// 	}
-// 	return nil
-// }
+func addBlockIO(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
+	if context.Int("blockio-weight") != 0 {
+		if context.Int("blockio-weight") > 1000 || context.Int("blockio-weight") < 10 {
+			return fmt.Errorf("blockio-weight range is from 10 to 1000")
+		}
+		rspec.Linux.Resources.BlockIO.Weight = uint16(context.Int("blockio-weight"))
+	}
+
+	if context.Int("blockio-leafweight") != 0 {
+		if context.Int("blockio-leafweight") > 1000 || context.Int("blockio-leafweight") < 10 {
+			return fmt.Errorf("blockio-leafweight range is from 10 to 1000")
+		}
+		rspec.Linux.Resources.BlockIO.LeafWeight = uint16(context.Int("blockio-leafweight"))
+	}
+	for _, trbds := range context.StringSlice("throttlereadbpsdevice") {
+		trbd := strings.Split(trbds, ":")
+		if len(trbd) == 2 {
+			fmt.Println("trbd=" + trbd[0])
+			blockIODevicestr := trbd[0]
+			rate, err := strconv.Atoi(trbd[1])
+			b := strings.Split(blockIODevicestr, ",")
+			if err != nil {
+				return err
+			}
+			if len(b) == 2 {
+				// major, err := strconv.Atoi(b[0])
+				// minor, err := strconv.Atoi(b[1])
+				// if err != nil {
+				// 	return err
+				// }
+				// td := specs.ThrottleDevice{Rate: uint64(rate)}
+				// td.blockIODevice.Major = int64(major)
+				// td.blockIODevice.Minor = int64(minor)
+				td := specs.ThrottleDevice{Rate: uint64(rate)}
+				rspec.Linux.Resources.BlockIO.ThrottleReadBpsDevice = append(rspec.Linux.Resources.BlockIO.ThrottleReadBpsDevice, &td)
+			} else {
+				return fmt.Errorf("throttlereadbpsdevice error: %s", blockIODevicestr)
+			}
+		} else {
+			return fmt.Errorf("throttlereadbpsdevice error: %s", trbds)
+		}
+	}
+	return nil
+}
+
 func addMounts(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
 	for _, mnts := range context.StringSlice("mounts") {
 		mnt := strings.Split(mnts, ":")
@@ -314,6 +324,9 @@ func addHugepageLimit(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, cont
 
 func setResourceCPU(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
 	cpustr := context.String("cpu")
+	if strings.EqualFold(cpustr, "") {
+		return nil
+	}
 	cpu := strings.Split(cpustr, ":")
 	if len(cpu) == 7 {
 		shares, err := strconv.Atoi(cpu[0])
@@ -334,6 +347,9 @@ func setResourceCPU(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, contex
 
 func setResourceMemory(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
 	mems := context.String("memory")
+	if strings.EqualFold(mems, "") {
+		return nil
+	}
 	mem := strings.Split(mems, ":")
 	if len(mem) == 5 {
 		limit, err := strconv.Atoi(mem[0])
