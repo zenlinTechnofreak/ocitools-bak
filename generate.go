@@ -48,7 +48,7 @@ var generateFlags = []cli.Flag{
 	cli.StringSliceFlag{Name: "mountpoint-add", Usage: "add mountpoints"},
 	cli.BoolFlag{Name: "terminal", Usage: "creates an interactive terminal for the container"},
 	cli.StringSliceFlag{Name: "uidmappings", Usage: "add UIDMappings e.g 0:0:10"},
-	cli.StringSliceFlag{Name: "gidmappings", Usage: "add GIDMappings e.g[0:0:10]"},
+	cli.StringSliceFlag{Name: "gidmappings", Usage: "add GIDMappings e.g 0:0:10"},
 	cli.StringSliceFlag{Name: "rlimit", Usage: "specifies rlimit options to apply to the container's process"},
 	cli.StringSliceFlag{Name: "sysctl", Usage: "Sysctl are a set of key value pairs that are set for the container on start"},
 	cli.StringFlag{Name: "cgroupspath", Usage: "specifies the path to cgroups that are created and/or joined by the container"},
@@ -296,7 +296,7 @@ func addNetworkPriority(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, co
 			if err != nil {
 				return err
 			}
-			p := specs.InterfacePriority{np[0], int64(priority)}
+			p := specs.InterfacePriority{np[0], uint32(priority)}
 			rspec.Linux.Resources.Network.Priorities = append(rspec.Linux.Resources.Network.Priorities, p)
 		} else {
 			return fmt.Errorf("networkpriority error: %s", nps)
@@ -337,7 +337,7 @@ func setResourceCPU(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, contex
 		if err != nil {
 			return err
 		}
-		cpustruct := specs.CPU{int64(shares), int64(quota), int64(period), int64(realtimeruntime), int64(realtimeperiod), cpu[5], cpu[6]}
+		cpustruct := specs.CPU{uint64(shares), uint64(quota), uint64(period), uint64(realtimeruntime), uint64(realtimeperiod), cpu[5], cpu[6]}
 		rspec.Linux.Resources.CPU = cpustruct
 	} else {
 		return fmt.Errorf("cpu error: %s", cpustr)
@@ -360,7 +360,7 @@ func setResourceMemory(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, con
 		if err != nil {
 			return err
 		}
-		memorystruct := specs.Memory{int64(limit), int64(reservation), int64(swap), int64(kernel), int64(swapniess)}
+		memorystruct := specs.Memory{uint64(limit), uint64(reservation), uint64(swap), uint64(kernel), uint64(swapniess)}
 		rspec.Linux.Resources.Memory = memorystruct
 	} else {
 		return fmt.Errorf("memory error: %s", mems)
@@ -962,7 +962,7 @@ func getDefaultTemplate() (specs.LinuxSpec, specs.LinuxRuntimeSpec) {
 			},
 			Resources: &specs.Resources{
 				Memory: specs.Memory{
-					Swappiness: -1,
+					Swappiness: 1,
 				},
 			},
 		},
