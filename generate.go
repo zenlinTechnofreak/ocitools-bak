@@ -965,6 +965,11 @@ func getDefaultTemplate() (specs.LinuxSpec, specs.LinuxRuntimeSpec) {
 					GID:         0,
 				},
 			},
+			Resources: &specs.Resources{
+				Memory: specs.Memory{
+					Swappiness: 1,
+				},
+			},
 		},
 	}
 	return spec, rspec
