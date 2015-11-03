@@ -71,12 +71,23 @@ func main() {
 					validateHostname,
 					validateRlimits,
 					validateSysctls,
+					validateRoot,
 				}
 
 				for _, v := range validations {
 					if err := v(spec, rspec); err != nil {
 						logrus.Fatalf("Validation failed: %q", err)
 					}
+				}
+			},
+		},
+		{
+			Name:    "validateRoot",
+			Aliases: []string{"vp"},
+			Usage:   "Validate root  with specs",
+			Action: func(c *cli.Context) {
+				if err := validateRoot(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
 				}
 			},
 		},
