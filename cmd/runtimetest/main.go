@@ -72,12 +72,23 @@ func main() {
 					validateRlimits,
 					validateSysctls,
 					validateRoot,
+					validatePlatform,
 				}
 
 				for _, v := range validations {
 					if err := v(spec, rspec); err != nil {
 						logrus.Fatalf("Validation failed: %q", err)
 					}
+				}
+			},
+		},
+		{
+			Name:    "validatePlatform",
+			Aliases: []string{"vp"},
+			Usage:   "Validate Platform  with specs",
+			Action: func(c *cli.Context) {
+				if err := validatePlatform(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
 				}
 			},
 		},
