@@ -84,7 +84,7 @@ func main() {
 		},
 		{
 			Name:    "validatePlatform",
-			Aliases: []string{"vp"},
+			Aliases: []string{"vpl"},
 			Usage:   "Validate Platform  with specs",
 			Action: func(c *cli.Context) {
 				if err := validatePlatform(spec, rspec); err != nil {
@@ -94,7 +94,7 @@ func main() {
 		},
 		{
 			Name:    "validateRoot",
-			Aliases: []string{"vp"},
+			Aliases: []string{"vro"},
 			Usage:   "Validate root  with specs",
 			Action: func(c *cli.Context) {
 				if err := validateRoot(spec, rspec); err != nil {
@@ -104,7 +104,7 @@ func main() {
 		},
 		{
 			Name:    "validateProcess",
-			Aliases: []string{"vp"},
+			Aliases: []string{"vpr"},
 			Usage:   "Validate process with specs",
 			Action: func(c *cli.Context) {
 				if err := validateProcess(spec, rspec); err != nil {
@@ -114,7 +114,7 @@ func main() {
 		},
 		{
 			Name:    "validateCapabilities",
-			Aliases: []string{"vc"},
+			Aliases: []string{"vca"},
 			Usage:   "Validate capabilities with specs",
 			Action: func(c *cli.Context) {
 				if err := validateCapabilities(spec, rspec); err != nil {
@@ -124,7 +124,7 @@ func main() {
 		},
 		{
 			Name:    "validateHostname",
-			Aliases: []string{"vh"},
+			Aliases: []string{"vho"},
 			Usage:   "Validate hostname with specs",
 			Action: func(c *cli.Context) {
 				if err := validateHostname(spec, rspec); err != nil {
@@ -134,7 +134,7 @@ func main() {
 		},
 		{
 			Name:    "validateRlimits",
-			Aliases: []string{"vr"},
+			Aliases: []string{"vrl"},
 			Usage:   "Validate rlimits with specs",
 			Action: func(c *cli.Context) {
 				if err := validateRlimits(spec, rspec); err != nil {
@@ -144,7 +144,7 @@ func main() {
 		},
 		{
 			Name:    "validateSysctls",
-			Aliases: []string{"vs"},
+			Aliases: []string{"vsy"},
 			Usage:   "Validate sysctls with specs",
 			Action: func(c *cli.Context) {
 				if err := validateSysctls(spec, rspec); err != nil {
