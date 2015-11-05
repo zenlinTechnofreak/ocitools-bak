@@ -70,6 +70,7 @@ func main() {
 					validateCapabilities,
 					validateHostname,
 					validateRlimits,
+					validateIDmappings,
 					validateSysctls,
 					validateRoot,
 					validatePlatform,
@@ -83,8 +84,18 @@ func main() {
 			},
 		},
 		{
+			Name:    "validateIDmappings",
+			Aliases: []string{"vid"},
+			Usage:   "Validate IDmappings  with specs",
+			Action: func(c *cli.Context) {
+				if err := validateIDmappings(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
+				}
+			},
+		},
+		{
 			Name:    "validatePlatform",
-			Aliases: []string{"vp"},
+			Aliases: []string{"vpl"},
 			Usage:   "Validate Platform  with specs",
 			Action: func(c *cli.Context) {
 				if err := validatePlatform(spec, rspec); err != nil {
@@ -94,7 +105,7 @@ func main() {
 		},
 		{
 			Name:    "validateRoot",
-			Aliases: []string{"vp"},
+			Aliases: []string{"vro"},
 			Usage:   "Validate root  with specs",
 			Action: func(c *cli.Context) {
 				if err := validateRoot(spec, rspec); err != nil {
