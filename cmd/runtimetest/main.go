@@ -70,6 +70,7 @@ func main() {
 					validateCapabilities,
 					validateHostname,
 					validateRlimits,
+					validateIDmappings,
 					validateSysctls,
 					validateRoot,
 					validatePlatform,
@@ -79,6 +80,16 @@ func main() {
 					if err := v(spec, rspec); err != nil {
 						logrus.Fatalf("Validation failed: %q", err)
 					}
+				}
+			},
+		},
+		{
+			Name:    "validateIDmappings",
+			Aliases: []string{"vid"},
+			Usage:   "Validate IDmappings  with specs",
+			Action: func(c *cli.Context) {
+				if err := validateIDmappings(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
 				}
 			},
 		},
