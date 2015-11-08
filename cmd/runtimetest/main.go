@@ -74,12 +74,23 @@ func main() {
 					validateSysctls,
 					validateRoot,
 					validatePlatform,
+					validateDevices,
 				}
 
 				for _, v := range validations {
 					if err := v(spec, rspec); err != nil {
 						logrus.Fatalf("Validation failed: %q", err)
 					}
+				}
+			},
+		},
+		{
+			Name:    "validateDevices",
+			Aliases: []string{"vde"},
+			Usage:   "Validate Devices  with specs",
+			Action: func(c *cli.Context) {
+				if err := validateDevices(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
 				}
 			},
 		},

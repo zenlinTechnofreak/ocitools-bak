@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 
 	"github.com/opencontainers/specs"
@@ -10,6 +11,7 @@ import (
 
 func validateDevices(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
 	devices := rspec.Linux.Devices
+	fmt.Println("enter device")
 	if devices != nil {
 		for _, device := range devices {
 			fmt.Println(device)
@@ -41,9 +43,9 @@ func validateDevices(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error
 			if devtype != device.Type {
 				return fmt.Errorf("device type expected: %v, actual: %v", device.Type, devtype)
 			}
-			// if permissions != device.FileMode {
-			// 	return fmt.Errorf("device filemode expected: %v, actual: %v", device.Permissions, permissions.String())
-			// }
+			if !strings.EqualFold(permissions.String(), device.FileMode.String()) {
+				return fmt.Errorf("device filemode expected: %v, actual: %v", device.Permissions, permissions.String())
+			}
 			if stat.Uid != device.UID {
 				return fmt.Errorf("device uid expected: %v, actual: %v", device.UID, stat.Uid)
 			}
