@@ -11,10 +11,8 @@ import (
 
 func validateDevices(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
 	devices := rspec.Linux.Devices
-	fmt.Println("enter device")
 	if devices != nil {
 		for _, device := range devices {
-			fmt.Println(device)
 			path := device.Path
 			devinfo, err := os.Stat(path)
 			if err != nil {
