@@ -10,12 +10,12 @@ import (
 
 func validateRoot(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
 	readonly := spec.Root.Readonly
-	mntori, _ := ioutil.ReadFile("/proc/mounts")
+	mntori, _ := ioutil.ReadFile("/proc/self/mountinfo")
 	mnt := bytes.Split(mntori, []byte{'\n'})
 	for _, row := range mnt {
 		col := bytes.Split(row, []byte{' '})
-		if len(col) == 6 && strings.EqualFold(string(col[1]), "/") && !strings.EqualFold(string(col[2]), "rootfs") {
-			opstr := string(col[3])
+		if len(col) == 10 && strings.EqualFold(string(col[4]), "/") {
+			opstr := string(col[5])
 			if strings.Contains(opstr, "rw,") && readonly == false {
 				return nil
 			} else if strings.Contains(opstr, "ro,") && readonly == true {
