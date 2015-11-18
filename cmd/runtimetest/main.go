@@ -75,12 +75,23 @@ func main() {
 					validateRoot,
 					validatePlatform,
 					validateDevices,
+					validateNamespace,
 				}
 
 				for _, v := range validations {
 					if err := v(spec, rspec); err != nil {
 						logrus.Fatalf("Validation failed: %q", err)
 					}
+				}
+			},
+		},
+		{
+			Name:    "validateNamespace",
+			Aliases: []string{"vna"},
+			Usage:   "Validate Namespace  with specs",
+			Action: func(c *cli.Context) {
+				if err := validateNamespace(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
 				}
 			},
 		},
