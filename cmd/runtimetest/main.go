@@ -76,12 +76,23 @@ func main() {
 					validatePlatform,
 					validateDevices,
 					validateNamespace,
+					validateMount,
 				}
 
 				for _, v := range validations {
 					if err := v(spec, rspec); err != nil {
 						logrus.Fatalf("Validation failed: %q", err)
 					}
+				}
+			},
+		},
+		{
+			Name:    "validateMount",
+			Aliases: []string{"vmo"},
+			Usage:   "Validate Mounts information with specs",
+			Action: func(c *cli.Context) {
+				if err := validateMount(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
 				}
 			},
 		},
