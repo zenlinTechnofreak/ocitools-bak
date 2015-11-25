@@ -87,6 +87,16 @@ func main() {
 			},
 		},
 		{
+			Name:    "validateHooks",
+			Aliases: []string{"vho"},
+			Usage:   "Validate Hooks with specs",
+			Action: func(c *cli.Context) {
+				if err := validateHooks(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
+				}
+			},
+		},
+		{
 			Name:    "validateMount",
 			Aliases: []string{"vmo"},
 			Usage:   "Validate Mounts information with specs",
