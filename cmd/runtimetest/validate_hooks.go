@@ -13,7 +13,7 @@ func validateHooks(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
 		for _, prestart := range rspec.Hooks.Prestart {
 			if strings.EqualFold(prestart.Path, "/bin/mkdir") && strings.EqualFold(prestart.Args[1], "./rootfs/prestarthook") {
 				if _, err := os.Stat("/prestarthook"); os.IsNotExist(err) {
-					return fmt.Errorf("Prestart Hook validate failed")
+					return fmt.Errorf("Prestart Hook validation failed")
 				}
 			}
 		}
@@ -23,7 +23,7 @@ func validateHooks(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error {
 			if strings.EqualFold(poststop.Path, "/bin/mkdir") && strings.EqualFold(poststop.Args[1], "./rootfs/poststophook") {
 				if _, err := os.Stat("/poststophook"); os.IsNotExist(err) {
 					fmt.Println("[poststop_hookvalidate_output_start]")
-					fmt.Println("folder poststophook is not exsist")
+					fmt.Println("folder poststophook is not exsist inside container")
 					fmt.Println("[poststop_hookvalidate_output_end]")
 				}
 			}
