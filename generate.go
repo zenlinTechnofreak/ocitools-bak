@@ -390,33 +390,38 @@ func addSeccompSyscalls(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, co
 			}
 			action := specs.Action(syscall[1])
 			var Args []*specs.Arg
-			argsslice := strings.Split(syscall[2], ",")
-			for _, argsstru := range argsslice {
-				args := strings.Split(argsstru, "/")
-				if len(args) == 4 {
-					index, err := strconv.Atoi(args[0])
-					value, err := strconv.Atoi(args[1])
-					value2, err := strconv.Atoi(args[2])
-					if err != nil {
-						return err
+			if strings.EqualFold(syscall[2], "") {
+				Args = nil
+			} else {
+
+				argsslice := strings.Split(syscall[2], ",")
+				for _, argsstru := range argsslice {
+					args := strings.Split(argsstru, "/")
+					if len(args) == 4 {
+						index, err := strconv.Atoi(args[0])
+						value, err := strconv.Atoi(args[1])
+						value2, err := strconv.Atoi(args[2])
+						if err != nil {
+							return err
+						}
+						switch args[3] {
+						case "":
+						case "SCMP_CMP_NE":
+						case "SCMP_CMP_LT":
+						case "SCMP_CMP_LE":
+						case "SCMP_CMP_EQ":
+						case "SCMP_CMP_GE":
+						case "SCMP_CMP_GT":
+						case "SCMP_CMP_MASKED_EQ":
+						default:
+							return fmt.Errorf("seccomp-sysctl args must be empty or one of SCMP_CMP_NE|SCMP_CMP_LT|SCMP_CMP_LE|SCMP_CMP_EQ|SCMP_CMP_GE|SCMP_CMP_GT|SCMP_CMP_MASKED_EQ")
+						}
+						op := specs.Operator(args[3])
+						Arg := specs.Arg{uint(index), uint64(value), uint64(value2), op}
+						Args = append(Args, &Arg)
+					} else {
+						return fmt.Errorf("seccomp-sysctl args error: %s", argsstru)
 					}
-					switch args[3] {
-					case "":
-					case "SCMP_CMP_NE":
-					case "SCMP_CMP_LT":
-					case "SCMP_CMP_LE":
-					case "SCMP_CMP_EQ":
-					case "SCMP_CMP_GE":
-					case "SCMP_CMP_GT":
-					case "SCMP_CMP_MASKED_EQ":
-					default:
-						return fmt.Errorf("seccomp-sysctl args must be empty or one of SCMP_CMP_NE|SCMP_CMP_LT|SCMP_CMP_LE|SCMP_CMP_EQ|SCMP_CMP_GE|SCMP_CMP_GT|SCMP_CMP_MASKED_EQ")
-					}
-					op := specs.Operator(args[3])
-					Arg := specs.Arg{uint(index), uint64(value), uint64(value2), op}
-					Args = append(Args, &Arg)
-				} else {
-					return fmt.Errorf("seccomp-sysctl args error: %s", argsstru)
 				}
 			}
 			syscallstruct := specs.Syscall{name, action, Args}

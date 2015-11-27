@@ -52,7 +52,6 @@ func loadSpecConfig() (spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, err
 }
 
 func main() {
-
 	app := cli.NewApp()
 	app.Name = "oci-runtimeValidate"
 	app.Version = "0.0.1"
@@ -77,12 +76,23 @@ func main() {
 					validateDevices,
 					validateNamespace,
 					validateMount,
+					validateSeccomp,
 				}
 
 				for _, v := range validations {
 					if err := v(spec, rspec); err != nil {
 						logrus.Fatalf("Validation failed: %q", err)
 					}
+				}
+			},
+		},
+		{
+			Name:    "validateSeccomp",
+			Aliases: []string{"vse"},
+			Usage:   "Validate Seccomp with specs",
+			Action: func(c *cli.Context) {
+				if err := validateSeccomp(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
 				}
 			},
 		},
