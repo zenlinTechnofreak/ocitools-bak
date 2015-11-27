@@ -13,7 +13,7 @@ func validateSeccomp(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec) error
 	if rspec.Linux.Seccomp.DefaultAction == specs.Action("SCMP_ACT_ALLOW") {
 		for _, syscall := range rspec.Linux.Seccomp.Syscalls {
 			if strings.EqualFold(syscall.Name, "getcwd") && syscall.Action == specs.Action("SCMP_ACT_ERRNO") {
-				var stdout, stderr bytes.Buffer
+				var stderr bytes.Buffer
 				cmd := exec.Command("pwd")
 				cmd.Stderr = &stderr
 				err := cmd.Run()
