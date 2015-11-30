@@ -97,6 +97,16 @@ func main() {
 			},
 		},
 		{
+			Name:    "validateSelinux",
+			Aliases: []string{"vsel"},
+			Usage:   "Validate selinuxlabel with specs",
+			Action: func(c *cli.Context) {
+				if err := validateSelinux(spec, rspec); err != nil {
+					logrus.Fatalf("Validation failed: %q", err)
+				}
+			},
+		},
+		{
 			Name:    "validateMount",
 			Aliases: []string{"vmo"},
 			Usage:   "Validate Mounts information with specs",
