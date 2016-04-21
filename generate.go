@@ -122,6 +122,14 @@ var generateCommand = cli.Command{
 	},
 }
 
+func u64Ptr(i int64) *uint64 { u := uint64(i); return &u }
+func u16Ptr(i int64) *uint16 { u := uint16(i); return &u }
+func i64Ptr(i int64) *int64  { return &i }
+func sPtr(s string) *string  { return &s }
+func bPtr(b bool) *bool      { return &b }
+func iPtr(i int64) *int64    { return &i }
+func u32Ptr(i int64) *uint32 { u := uint32(i); return &u }
+
 func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.Context) error {
 	spec.Root.Path = context.String("rootfs")
 	spec.Root.Readonly = context.Bool("read-only")
@@ -134,10 +142,10 @@ func modify(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *cli.C
 	spec.Platform.Arch = context.String("arch")
 	spec.Process.Cwd = context.String("cwd")
 	spec.Process.Terminal = context.Bool("terminal")
-	rspec.Linux.CgroupsPath = context.String("cgroupspath")
+	rspec.Linux.CgroupsPath = sPtr(context.String("cgroupspath"))
 	rspec.Linux.ApparmorProfile = context.String("apparmor")
-	rspec.Linux.Resources.DisableOOMKiller = context.Bool("disableoomiller")
-	rspec.Linux.Resources.Pids.Limit = int64(context.Int("pids"))
+	rspec.Linux.Resources.DisableOOMKiller = bPtr(context.Bool("disableoomiller"))
+	rspec.Linux.Resources.Pids.Limit = i64Ptr(int64(context.Int("pids")))
 	rspec.Linux.Resources.Network.ClassID = context.String("networkid")
 
 	for i, a := range context.StringSlice("args") {
@@ -236,14 +244,14 @@ func addBlockIO(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *c
 		if context.Int("blockio-weight") > 1000 || context.Int("blockio-weight") < 10 {
 			return fmt.Errorf("blockio-weight range is from 10 to 1000")
 		}
-		rspec.Linux.Resources.BlockIO.Weight = uint16(context.Int("blockio-weight"))
+		rspec.Linux.Resources.BlockIO.Weight = u16Ptr(int64(context.Int("blockio-weight")))
 	}
 
 	if context.Int("blockio-leafweight") != 0 {
 		if context.Int("blockio-leafweight") > 1000 || context.Int("blockio-leafweight") < 10 {
 			return fmt.Errorf("blockio-leafweight range is from 10 to 1000")
 		}
-		rspec.Linux.Resources.BlockIO.LeafWeight = uint16(context.Int("blockio-leafweight"))
+		rspec.Linux.Resources.BlockIO.LeafWeight = u16Ptr(int64(context.Int("blockio-leafweight")))
 	}
 	for _, trbds := range context.StringSlice("throttlereadbpsdevice") {
 		trbd := strings.Split(trbds, ":")
@@ -264,7 +272,7 @@ func addBlockIO(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, context *c
 				// td := specs.ThrottleDevice{Rate: uint64(rate)}
 				// td.blockIODevice.Major = int64(major)
 				// td.blockIODevice.Minor = int64(minor)
-				td := specs.ThrottleDevice{Rate: uint64(rate)}
+				td := specs.ThrottleDevice{Rate: u64Ptr(int64(rate))}
 				rspec.Linux.Resources.BlockIO.ThrottleReadBpsDevice = append(rspec.Linux.Resources.BlockIO.ThrottleReadBpsDevice, &td)
 			} else {
 				return fmt.Errorf("throttlereadbpsdevice error: %s", blockIODevicestr)
@@ -318,7 +326,7 @@ func addHugepageLimit(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, cont
 			if err != nil {
 				return err
 			}
-			hp := specs.HugepageLimit{hpl[0], uint64(limits)}
+			hp := specs.HugepageLimit{sPtr(hpl[0]), u64Ptr(int64(limits))}
 			rspec.Linux.Resources.HugepageLimits = append(rspec.Linux.Resources.HugepageLimits, hp)
 		} else {
 			return fmt.Errorf("hugepagelimit error: %s", hpls)
@@ -342,8 +350,8 @@ func setResourceCPU(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, contex
 		if err != nil {
 			return err
 		}
-		cpustruct := specs.CPU{uint64(shares), uint64(quota), uint64(period), uint64(realtimeruntime), uint64(realtimeperiod), cpu[5], cpu[6]}
-		rspec.Linux.Resources.CPU = cpustruct
+		cpustruct := specs.CPU{u64Ptr(int64(shares)), u64Ptr(int64(quota)), u64Ptr(int64(period)), u64Ptr(int64(realtimeruntime)), u64Ptr(int64(realtimeperiod)), sPtr(cpu[5]), sPtr(cpu[6])}
+		rspec.Linux.Resources.CPU = &cpustruct
 	} else {
 		return fmt.Errorf("cpu error: %s", cpustr)
 	}
@@ -361,12 +369,13 @@ func setResourceMemory(spec *specs.LinuxSpec, rspec *specs.LinuxRuntimeSpec, con
 		reservation, err := strconv.Atoi(mem[1])
 		swap, err := strconv.Atoi(mem[2])
 		kernel, err := strconv.Atoi(mem[3])
-		swapniess, err := strconv.Atoi(mem[4])
+		kernelTcp, err := strconv.Atoi(mem[4])
+		swapniess, err := strconv.Atoi(mem[5])
 		if err != nil {
 			return err
 		}
-		memorystruct := specs.Memory{uint64(limit), uint64(reservation), uint64(swap), uint64(kernel), uint64(swapniess)}
-		rspec.Linux.Resources.Memory = memorystruct
+		memorystruct := specs.Memory{u64Ptr(int64(limit)), u64Ptr(int64(reservation)), u64Ptr(int64(swap)), u64Ptr(int64(kernel)), u64Ptr(int64(kernelTcp)), u64Ptr(int64(swapniess))}
+		rspec.Linux.Resources.Memory = &memorystruct
 	} else {
 		return fmt.Errorf("memory error: %s", mems)
 	}
@@ -971,8 +980,8 @@ func getDefaultTemplate() (specs.LinuxSpec, specs.LinuxRuntimeSpec) {
 				},
 			},
 			Resources: &specs.Resources{
-				Memory: specs.Memory{
-					Swappiness: 1,
+				Memory: &specs.Memory{
+					Swappiness: u64Ptr(1),
 				},
 			},
 		},
